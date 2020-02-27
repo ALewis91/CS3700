@@ -12,33 +12,33 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 
-class ProcessBlock implements Callable<String>
+class LineReverser implements Callable<String>
 {
-	private String unprocessedBlock;
-	private StringBuilder block;
+	private String unprocessedLine;
 	private Stack<String> wordStack;
-	private Scanner blockScanner;
+	private Scanner lineScanner;
+	private StringBuilder processedLine;
 	
-	ProcessBlock(String block)
+	LineReverser(String line)
 	{
-		this.unprocessedBlock = block;
+		this.unprocessedLine = line;
 		wordStack = new Stack<>();
-		this.block = new StringBuilder();
+		processedLine = new StringBuilder();
 	}
 	
 	public String call()
 	{
-		unprocessedBlock = unprocessedBlock.replaceAll("[^A-Za-z0-9 ]", "");
-		blockScanner = new Scanner(unprocessedBlock);
-		while (blockScanner.hasNext())
-			wordStack.push(blockScanner.next());
-		wordStack.push("\n");
+		unprocessedLine = unprocessedLine.replaceAll("[^A-Za-z0-9 ]", "");
+		lineScanner = new Scanner(unprocessedLine);
+		while (lineScanner.hasNext())
+			wordStack.push(lineScanner.next());
 		
 		while(!wordStack.isEmpty()) 
-			block.append(wordStack.pop() + ' ');
-		block.append('\n');
-		
-		return block.toString();
+		{
+			processedLine.append(wordStack.pop() + ' ');			
+		}
+		processedLine.append('\n');
+		return processedLine.toString();
 	}	
 }
 
@@ -65,27 +65,22 @@ public class TextReverser2
 
 			System.out.println("Processing with " + numberThreads + " threads\n");
 			
-			StringBuilder block = new StringBuilder();
+			String line;
 			System.out.println(getTimeStamp() + " Starting to read file");
 			
 			while (fileScan.hasNextLine()) 
 			{
-				block.append(fileScan.nextLine());
-				for (int y = 0 ; y < 4; y++)
-				{
-					if (fileScan.hasNext())
-						block.append(fileScan.nextLine());
-				}
-				futures.add(service.submit(new ProcessBlock(block.toString())));
-				block = new StringBuilder();
+				line = fileScan.nextLine();
+				futures.add(service.submit(new LineReverser(line)));
 			}
 			
-			for (Future<String> task : futures)
+			for (int y = futures.size() - 1; y > -1; y--)
 			{	
 				try 
 				{
-					writer.write(task.get());
-				} catch (InterruptedException e) 
+					writer.write(futures.get(y).get());
+				} 
+				catch (InterruptedException e) 
 				{
 					e.printStackTrace();
 				} 
@@ -96,7 +91,7 @@ public class TextReverser2
 			}
 			fileScan.close();
 			writer.close();
-			System.out.println(getTimeStamp() + " Finished reading file\n\n");
+			System.out.println(getTimeStamp() + " Finished writing file\n\n");
 		}
 	}
 	
