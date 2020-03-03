@@ -4,21 +4,26 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.PriorityQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.RecursiveAction;
+import java.util.concurrent.RecursiveTask;
 
-public class HuffmanTree 
+public class HuffmanTreeMulti1
 {
+	
 	private int[] characterFrequencyTable;
 	private byte[] compressedText;
 	private byte[] buffer;
 	private byte modByte;
 	private byte bitBuffer;
 	private int bufferSize;
-	private HuffmanNode root;
-	private String text;
+	private static HuffmanNode root;
+	private static byte[] text;
 	private PriorityQueue<HuffmanNode> freqPQ;
-	private HashMap<Character, String> compressionMap;
+	private static ConcurrentHashMap<Character, String> compressionMap;
 	private final int N_ASCII = 256;
 	private String input;
 	private String output;
@@ -26,10 +31,13 @@ public class HuffmanTree
 	private final int maxBytes = 512;
 	private int currentBytes;
 	private int numBitsRead;
+	
+	private int leaves;
+	private ForkJoinPool pool;
+	private CountDownLatch latch;
 		
-	public HuffmanTree(String in, String out)
-	{	
-		
+	public HuffmanTreeMulti1(String in, String out)
+	{		
 		input = in;
 		output = out;
 
@@ -37,24 +45,21 @@ public class HuffmanTree
 		bitBuffer = 0;
 		bufferSize = 0;
 		currentBytes = 0;
+		leaves = 0;
 				
 		characterFrequencyTable = new int[N_ASCII];
-		freqPQ = new PriorityQueue<>(new HuffmanNodeComparator());
-		compressionMap = new HashMap<>();
-		
+		freqPQ = new PriorityQueue<HuffmanNode>();
+		compressionMap = new ConcurrentHashMap<>();
 	}
 	
 	public void createTree() throws IOException
 	{
-
-		text = new String(Files.readAllBytes(Paths.get(input)));
-		
-		for (int x = 0; x < text.length(); x++)
-			characterFrequencyTable[text.charAt(x)]++;
-		
+		text = Files.readAllBytes(Paths.get(input));
+		pool = ForkJoinPool.commonPool();
+		characterFrequencyTable = pool.invoke(new RecursiveFrequencyGetter(0, text.length));
 		
 		int freq;
-		for (int x = 0; x < characterFrequencyTable.length; x++)
+		for (int x = 0; x < N_ASCII; x++)
 		{
 			freq = characterFrequencyTable[x];
 			if (freq > 0)
@@ -62,7 +67,7 @@ public class HuffmanTree
 				freqPQ.add(new HuffmanNode(freq, (char)x));	
 			}
 		}
-		
+		leaves = freqPQ.size();
 		while (freqPQ.size() > 1)
 		{
 			HuffmanNode left = freqPQ.poll();
@@ -76,12 +81,22 @@ public class HuffmanTree
 			freqPQ.add(par);
 		}
 		root = freqPQ.poll();
-
 	}	
 	
 	public void encode() throws IOException
 	{
-		mapBuildTraversal(root, "", compressionMap, 0);
+		latch = new CountDownLatch(leaves);
+		pool.execute(new RecursiveMapBuilder(root, ""));	
+		try 
+		{
+			latch.await();
+		} 
+		catch (InterruptedException e) 
+		{
+			e.printStackTrace();
+		}
+		pool.shutdown();
+
 		fos = new FileOutputStream(output);
 		writeTree(root);
 		writeEncodedText();
@@ -89,16 +104,39 @@ public class HuffmanTree
 		fos.close();
 	}
 	
-	private void mapBuildTraversal(HuffmanNode node, String code, HashMap<Character, String> map, int lvl)
-	{	
-		if (!node.isExternal())
-		{
-			mapBuildTraversal(node.getLeft(), code + "0", map, (lvl+1));
-			mapBuildTraversal(node.getRight(), code + "1", map, (lvl+1));
+
+	protected class RecursiveMapBuilder extends RecursiveAction
+	{
+		/**
+		 * 
+		 */
+		private static final long serialVersionUID = 1L;
+		private HuffmanNode node;
+		private String code;
+		
+		protected RecursiveMapBuilder(HuffmanNode node, String code)
+		{	
+			this.node = node;
+			this.code = code;
 		}
-		else
+		
+		@Override
+		protected void compute()
 		{
-			map.put(node.getChar(), code);
+			if (node.isExternal())
+			{
+				compressionMap.put(node.getChar(), code.toString());
+				latch.countDown();
+			}
+			else
+			{
+				RecursiveMapBuilder  left = new RecursiveMapBuilder(node.getLeft(), code + "0");
+				left.fork();
+				node = node.getRight();
+				code += "1";
+				compute();
+			}	
+			
 		}
 	}
 	
@@ -168,9 +206,10 @@ public class HuffmanTree
 	private void writeEncodedText() throws IOException
 	{
 		String code;
-		for (int x = 0; x < text.length(); x++)
+		for (int x = 0; x < text.length; x++)
 		{
-			code = compressionMap.get(text.charAt(x));
+			code = compressionMap.get((char)text[x]);
+			//System.out.println(text[x] + ": " + code);
 			for (int y = 0; y < code.length(); y++)
 			{
 				if (code.charAt(y) == '1')
@@ -190,7 +229,7 @@ public class HuffmanTree
 		compressedText = Files.readAllBytes(Paths.get(input));
 		int numBits = compressedText.length * 8;
 		numBitsRead = 0;
-		root = readTree(0);
+		root = readTree();
 		//traverse(root);		
 		PrintWriter writer = new PrintWriter(new File(output));
 		HuffmanNode node = root;
@@ -209,7 +248,8 @@ public class HuffmanTree
 		writer.close();
 	}
 	
-    private HuffmanNode readTree(int lvl) 
+	
+    private HuffmanNode readTree() 
     {
     	byte character = 0;
     	if (getBit())
@@ -231,8 +271,8 @@ public class HuffmanTree
     	}
     	else
     	{
-    		HuffmanNode left = readTree(lvl+1);
-    		HuffmanNode right = readTree(lvl+1);
+    		HuffmanNode left = readTree();
+    		HuffmanNode right = readTree();
     		HuffmanNode node = new HuffmanNode('\0', left, right);
     		return node;
     		//return new HuffmanNode('\0', left, right);
@@ -256,5 +296,48 @@ public class HuffmanTree
     	return (modByte & 128) == 128;
     }
     
+    protected class RecursiveFrequencyGetter extends RecursiveTask<int[]>
+    {
+    	/**
+		 * 
+		 */
+		private static final long serialVersionUID = 1L;
+		int[] localFreqs;
+    	int start;
+    	int end;
+    	
+    	RecursiveFrequencyGetter(int start, int end)
+    	{
+    		this.start = start;
+    		this.end = end;
+    		localFreqs = new int[N_ASCII];
+    	}
+    	
+		@Override
+		protected int[] compute()
+		{
+			if(start - end < 12_000)
+			{
+				for (int x = start; x < end; x++)
+				{
+					localFreqs[text[x]]++;
+				}
+				return localFreqs;
+			}
+			else
+			{
+				int mid = (start + end)/2;
+				RecursiveFrequencyGetter right = new RecursiveFrequencyGetter(mid, end);
+				right.fork();
+				end = mid;
+				compute();
+				int[] rightResult = right.join();
+				for (int x = 0; x < N_ASCII; x++)
+					localFreqs[x] += rightResult[x];
+				return localFreqs;
+			}
+		}
+    	
+    }
 
 }

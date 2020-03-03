@@ -1,4 +1,4 @@
-public class HuffmanNode 
+public class HuffmanNode implements Comparable<HuffmanNode>
 {
 	//private HuffmanNode par;
 	private HuffmanNode left;
@@ -22,6 +22,13 @@ public class HuffmanNode
 		//par = null;
 		left = null;
 		right = null;
+	}
+	
+	HuffmanNode(char c, HuffmanNode left, HuffmanNode right)
+	{
+		character = c;
+		this.left = left;
+		this.right = right;
 	}
 	
 	public void setFreq(int f)
@@ -73,9 +80,16 @@ public class HuffmanNode
 	{
 		return right;
 	}
+
+	@Override
+	public int compareTo(HuffmanNode o) 
+	{
+		if (frequency > o.getFreq())
+			return 1;
+		else if (frequency < o.getFreq())
+			return -1;
+		else return 0;
+	}
 	
-	//public HuffmanNode getPar()
-	//{
-	//	return par;
-	//}
+
 }

@@ -1,7 +1,7 @@
 import java.io.IOException;
 import java.sql.Timestamp;
 
-public class FileCompressor {
+public class FileCompressor3 {
 
 	static Timestamp timeStamp;
 	
@@ -12,13 +12,13 @@ public class FileCompressor {
 		long startTime;
 		long stopTime;
 		int numberTrials = 10_000;
-		HuffmanTree tree;
+		HuffmanTreeMulti2 tree;
 		
 		// Warmup
 		System.out.println("Warming up...");
 		for (int i = 0; i < 1_000; i++)
 		{
-			tree = new HuffmanTree("src/US_Constitution.txt", "US_Constitution_compressed.txt");
+			tree = new HuffmanTreeMulti2("src/US_Constitution.txt", "US_Constitution_compressed.txt");
 			tree.createTree();
 			tree.encode();
 		}
@@ -26,12 +26,12 @@ public class FileCompressor {
 		// Obtain average run time from n number of trials
 		for (int i = 0; i < numberTrials; i++)
 		{
-			
+
 			System.out.println("Trial #" + (i+1));
 			System.out.println(getTimeStamp() + " Starting to build the tree...");
 			startTime = System.nanoTime();
 			
-			tree = new HuffmanTree("src/US_Constitution.txt", "US_Constitution_compressed.txt");
+			tree = new HuffmanTreeMulti2("src/US_Constitution.txt", "US_Constitution_compressed.txt");
 			tree.createTree();
 
 			stopTime = System.nanoTime();
@@ -54,8 +54,8 @@ public class FileCompressor {
 		System.out.println("Average Tree Building Time: " + (totalTreeBuildingTime/numberTrials) + " ns");
 		System.out.println("Average File Compression Time: " + (totalFileCompressionTime/numberTrials) + " ns");
 		
-		//tree = new HuffmanTree("US_Constitution_compressed.txt", "US_Constitution_decompressed.txt");
-		//tree.expand();
+		tree = new HuffmanTreeMulti2("US_Constitution_compressed.txt", "US_Constitution_decompressed.txt");
+		tree.expand();
 	}
 	
 	@SuppressWarnings("deprecation")

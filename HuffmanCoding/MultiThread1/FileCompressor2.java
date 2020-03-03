@@ -1,7 +1,7 @@
 import java.io.IOException;
 import java.sql.Timestamp;
 
-public class FileCompressor {
+public class FileCompressor2 {
 
 	static Timestamp timeStamp;
 	
@@ -10,28 +10,28 @@ public class FileCompressor {
 		long totalTreeBuildingTime = 0;
 		long totalFileCompressionTime = 0;
 		long startTime;
+		
 		long stopTime;
 		int numberTrials = 10_000;
-		HuffmanTree tree;
+		HuffmanTreeMulti1 tree;
 		
 		// Warmup
 		System.out.println("Warming up...");
 		for (int i = 0; i < 1_000; i++)
 		{
-			tree = new HuffmanTree("src/US_Constitution.txt", "US_Constitution_compressed.txt");
+			tree = new HuffmanTreeMulti1("src/US_Constitution.txt", "US_Constitution_compressed.txt");
 			tree.createTree();
 			tree.encode();
 		}
 
 		// Obtain average run time from n number of trials
 		for (int i = 0; i < numberTrials; i++)
-		{
-			
+		{			
 			System.out.println("Trial #" + (i+1));
 			System.out.println(getTimeStamp() + " Starting to build the tree...");
 			startTime = System.nanoTime();
 			
-			tree = new HuffmanTree("src/US_Constitution.txt", "US_Constitution_compressed.txt");
+			tree = new HuffmanTreeMulti1("src/US_Constitution.txt", "US_Constitution_compressed.txt");
 			tree.createTree();
 
 			stopTime = System.nanoTime();
