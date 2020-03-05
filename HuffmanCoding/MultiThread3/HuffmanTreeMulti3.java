@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.RecursiveTask;
+import java.util.concurrent.TimeUnit;
 
 
 public class HuffmanTreeMulti3
@@ -248,7 +249,7 @@ public class HuffmanTreeMulti3
 	private void writeEncodedText()
 	{
 		latch = new CountDownLatch(1);
-		pool.invoke(new BlockWriter(0, text.length, new CountDownLatch(0)));
+		pool.invoke(new BlockWriter(0, text.length, new CountDownLatch(0)));//, new CountDownLatch(0)));
 		try 
 		{
 			latch.await();
@@ -260,15 +261,15 @@ public class HuffmanTreeMulti3
 		pool.shutdown();
 	}
 	
-	protected class BlockWriter extends RecursiveAction
+	private class BlockWriter extends RecursiveAction
 	{
 
 		/**
 		 * 
 		 */
 		private static final long serialVersionUID = 1L;
-		private CountDownLatch iCanWrite;
-		private CountDownLatch youCanWrite;
+		private CountDownLatch leftLatch;
+
 		private int start, end;
 		private byte[] bytes;
 		private byte currentByte;
@@ -276,10 +277,9 @@ public class HuffmanTreeMulti3
 		private int byteBufferSize;
 		private String code;
 		
-		protected BlockWriter(int lo, int hi, CountDownLatch countDown)
+		private BlockWriter(int lo, int hi, CountDownLatch leftLatch)
 		{
-			iCanWrite = countDown;
-			youCanWrite = new CountDownLatch(1);
+			this.leftLatch = leftLatch;
 			start = lo;
 			end = hi;
 			bytes = new byte[10_000];
@@ -288,7 +288,7 @@ public class HuffmanTreeMulti3
 			currentBytesSize = 0;
 		}
 		
-		protected void compute()
+		public void compute()
 		{
 			if (end - start < 15_000)
 			{
@@ -313,36 +313,54 @@ public class HuffmanTreeMulti3
 				cap();
 				try 
 				{
-					iCanWrite.await();
+					System.out.println("Waiting to write " + start + " to " + end);
+					leftLatch.await();
+					synchronized (BlockWriter.class)
+					{
+						System.out.println("Writing " + start + " to " + end);
+						fos.write(bytes, 0, currentBytesSize);
+						System.out.println("Finished writing " + start + " to " + end);
+						if (end == text.length)
+						{
+							latch.countDown();	
+							System.out.println("Released latch for main thread");
+						}
+					}
+					System.out.println(start + " to " + end + " returning....");
+					return;
 				} 
-				catch (InterruptedException e1) 
+				catch (Exception e1) 
 				{
 					e1.printStackTrace();
 				}
-				try 
-				{
-					fos.write(bytes, 0, currentBytesSize);
-					 if (end == text.length)
-						 latch.countDown();
-				} 
-				catch (IOException e) 
-				{
-					e.printStackTrace();
-				}
-
 			}
 			else
 			{
 				int mid = (start + end)/2;
-				BlockWriter right = new BlockWriter(mid, end, youCanWrite);
+				
+				BlockWriter left = new BlockWriter(start, mid, leftLatch);//, rightLatch);
+				
+				CountDownLatch rightLatch = new CountDownLatch(1);
+				
+				BlockWriter right = new BlockWriter(mid, end, rightLatch);//, rightRightLatch);
+				
+				System.out.println("Forking left: " + start + " to " + mid);
+				left.fork();
+				System.out.println("Forking right: " + mid + " to " + end);
 				right.fork();
-				end = mid;
-				compute();
-				youCanWrite.countDown();
+				System.out.println("Waiting for left to join: " + start + " to " + mid);
+				left.join();
+				System.out.println("Joined left: " + start + " to " + mid);
+				System.out.println("Counting down right latch");
+				rightLatch.countDown();
+				System.out.println("Waiting for right to join: " + mid + " to " + end);
 				right.join();
+				System.out.println("Joined right: " + mid + " to " + end);
+				System.out.println(start + " to " + end + " returning....");
+				return;
 			}
 		}
-		protected void writeBit(boolean bit)
+		public void writeBit(boolean bit)
 		{
 			if (byteBufferSize == 7)
 			{
@@ -365,7 +383,7 @@ public class HuffmanTreeMulti3
 
 		
 		
-		protected void cap() 
+		public void cap() 
 		{
 			code = compressionMap.get((char)sentinel);
 			for (int y = 0; y < code.length(); y++)
