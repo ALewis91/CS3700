@@ -5,7 +5,7 @@ public class FileCompressor4 {
 
 	static Timestamp timeStamp;
 	
-	public static void main(String[] args) throws IOException, InterruptedException 
+	public static void main(String[] args) throws IOException 
 	{
 		long totalTreeBuildingTime = 0;
 		long totalFileCompressionTime = 0;
@@ -14,15 +14,16 @@ public class FileCompressor4 {
 		int numberTrials = 10_000;
 		HuffmanTreeMulti3 tree;
 		
+		
 		// Warmup
 		System.out.println("Warming up...");
-		for (int i = 0; i < 1000; i++)
+		for (int i = 0; i < 1_000; i++)
 		{
 			tree = new HuffmanTreeMulti3("src/US_Constitution.txt", "US_Constitution_compressed.txt");
 			tree.createTree();
 			tree.encode();
 		}
-
+	
 		// Obtain average run time from n number of trials
 		for (int i = 0; i < numberTrials; i++)
 		{
@@ -52,10 +53,10 @@ public class FileCompressor4 {
 			
 		}
 		System.out.println("Average Tree Building Time: " + (totalTreeBuildingTime/numberTrials) + " ns");
-		System.out.println("Average File Compression Time: " + (totalFileCompressionTime/numberTrials) + " ns");
+		System.out.println("Average File Encoding Time: " + (totalFileCompressionTime/numberTrials) + " ns");
 		
-		//tree = new HuffmanTreeMulti3("US_Constitution_compressed.txt", "US_Constitution_decompressed.txt");
-		//tree.expand();
+		tree = new HuffmanTreeMulti3("US_Constitution_compressed.txt", "US_Constitution_decompressed.txt");
+		tree.expand();
 	}
 	
 	@SuppressWarnings("deprecation")
